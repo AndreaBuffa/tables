@@ -1,0 +1,14 @@
+arrive group 2 #0
+arrive group 2 #1
+arrive group 4 #2
+arrive group 4 #3
+arrive group 6 #4
+arrive group 4 #5
+arrive group 4 #6
+arrive group 5 #7
+leave group [0]
+leave group [4]
+leave group [7]
+leave group [7]
+locate group [7]
+arrive group 1
