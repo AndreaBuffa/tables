@@ -6,15 +6,20 @@ arrive group 6 #4
 arrive group 4 #5
 arrive group 4 #6
 arrive group 5 #7
-arrive group 5 #7
-arrive group 5 #7
-arrive group 5 #7
-arrive group 2 #7
-arrive group 6 #7
-arrive group 2 #7
+arrive group 5 #8
+arrive group 5 #9
+arrive group 5 #10
+arrive group 2 #11
+arrive group 6 #12
+arrive group 2 #13
 leave group [0]
 leave group [4]
 leave group [7]
 leave group [7]
 locate group [7]
-arrive group 1
+locate group [2]
+arrive group 1 #14
+leave group [12]
+leave group [8]
+leave group 1 #14
+arrive group 6 #15

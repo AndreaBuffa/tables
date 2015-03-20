@@ -10,15 +10,18 @@ MAX_GROUP_SIZE = 6
 class Table:
 	size = 0
 	emptySeats = 0
+	index = 0
 
 	def __init__(self, _size):
-		self.size = _size
-		self.emptySize = MAX_TABLE_SIZE - _size
+		self.size = self.emptySeats = _size
 
 class CustomerGroup:
 	size = 0
+	# true if the group has got a table
 	served = False
+	# true if the group in waiting inline
 	managed = False
+	# the current table
 	table = None
 
 	def __init__(self, _size):
@@ -41,38 +44,55 @@ nowhere else to put them. This may mean that the group of 6 waits a long
 time, possibly until they become frustrated and leave.
 '''
 class SeatingManager:
-	# a nested list where '''
+	# a nested list where each row is the the list of tables with i empty
+	# seats. If a group with i persons comes, then take one table from 
+	# the tables[i]
 	tables = []
+	# list of the groups waiting inline
 	waitingGroups = []
 
 	def __init__(self, _tables):
 		for x in range(0, MAX_TABLE_SIZE + 1):
 			self.tables.append([])
 		for table in _tables:
-			table.emptySeats = table.size
 			self.tables[table.size].append(table)
 
 	''' Group arrives and wants to be seated. '''
 	def arrives(self, group):
-		if group.managed: 
+		if group.managed:
 			return
 		if group.served:
 			return
 		if not self.allocateTable(group):
+			# cannot find a table but keep the group inline
+			group.managed = True
 			self.waitingGroups.append(group)
 
 	''' Whether seated or not, the group leaves the restaurant. '''
 	def leaves(self, group):
-		if group.managed:
-			if group.served:
-				group.served = group.managed = False
-				self.deallocateTable(group)
-			else:
-				self.waitingGroups = filter(
-					lambda aGroup: aGgroup is group,
-					self.waitingGroups)
-			return True
-		return False
+		if not group.managed:
+			return False
+
+		if group.served:
+			tableSize = group.table.emptySeats
+			table = group.table
+			self.tables[tableSize].pop(group.table.index)
+			group.table = None
+			table.emptySeats += group.size
+			table.index = len(self.tables[table.emptySeats])
+			self.tables[table.emptySeats].append(table)
+			# iterate the groups inline in order to find a table for 
+			# or more of them
+			for (offset, groupInline) in enumerate(self.waitingGroups):
+				if self.allocateTable(groupInline):
+					self.waitingGroups.pop(offset)
+		else:
+			self.waitingGroups = filter(
+				lambda aGroup: aGroup is not group,
+				self.waitingGroups)
+
+		group.served = group.managed = False
+		return True
 
 	''' Return the table at which the group is seated, or null if
 	they  are not seated (whether they're waiting or already left). '''
@@ -88,22 +108,13 @@ class SeatingManager:
 				table = self.tables[tableSize].pop()
 				group.table = table
 				group.served = group.managed = True
-				table.emptySeats = table.size - group.size
+				table.emptySeats -= group.size
+				table.index = len(self.tables[table.emptySeats])
 				self.tables[table.emptySeats].append(table)
 				return True
 			else:
 				tableSize += 1
 		return False
-
-	def deallocateTable(self, group):
-		tableSize = group.table.emptySeats
-		table = group.table
-		self.tables[tableSize] = filter(lambda theTable: theTable is not table, self.tables[tableSize])
-		group.table = None
-		group.served = group.managed = False
-		table.emptySeats += group.size
-		self.tables[table.emptySeats].append(table)
-		return True
 
 	def dump(self):
 		queueString = b"Groups waiting inline: "
@@ -111,7 +122,7 @@ class SeatingManager:
 			for group in self.waitingGroups:
 				queueString += " %d" % group.size
 		else:
-			queueString += "%d" % 0
+			queueString += "None"
 		print "-------------------------"
 		print queueString
 		print "-------------------------"
@@ -119,20 +130,23 @@ class SeatingManager:
 		tableString = b""
 		for tableRow in self.tables:
 			for table in tableRow:
-				tableString += "\n %d seats table, %d seated" % (table.size, table.size - table.emptySeats)
+				tableString += "\n %d seats table, %d seated %s" % (
+					table.size,
+					table.size - table.emptySeats,
+					"(full)" if table.emptySeats == 0 else "")
 			print tableString
 			tableString = b""
 
-tables = []
-groups = []
+tablesFromFile = []
+groupsFromFile = []
 settings = open('settings', 'r')
 for line in settings:
 	tableSize = re.compile('table (\d)+').search(line)
 	if tableSize:
-		tables.append(Table(int(tableSize.group(1))))
+		tablesFromFile.append(Table(int(tableSize.group(1))))
 		#print "Table with %s seats added" % tableSize.group(1)
 
-manager = SeatingManager(tables)
+manager = SeatingManager(tablesFromFile)
 
 f = open('inputSimulation', 'r')
 # Each file line is a message to the SeatingManager
@@ -141,24 +155,27 @@ for line in f:
 	if groupSize:
 		theGroup = CustomerGroup(int(groupSize.group(1)))
 		# rememeber for later
-		groups.append(theGroup)
+		groupsFromFile.append(theGroup)
 		# ARRIVE MESSAGE
 		print "*** Group made of %d arrived! ***" % theGroup.size
 		manager.arrives(theGroup)
 	else:
-		listIndex = re.compile('leave group \[(\d)+\]').search(line)
-		if listIndex:
-			group = groups[int(listIndex.group(1))]
+		isLeaveMatch = re.compile('leave group \[(\d+)\]').search(line)
+		if isLeaveMatch:
+			index = int(isLeaveMatch.group(1))
+			group = groupsFromFile[index]
 			if group:
 				# LEAVE MESSAGE
-				print "*** Group made of %d left! ***" % group.size
+				print "*** Group index [%d](group size %d): left! ***" % (
+					index, 
+					group.size)
 				found = manager.leaves(group)
-				if not found: print "Already left <--------"
+				if not found: print "--------> Already left"
 		else:
-			match = re.compile('locate group \[(\d)+\]').search(line)
+			match = re.compile('locate group \[(\d+)\]').search(line)
 			if match:
 				listIndex = int(match.group(1))
-				group = groups[listIndex]
+				group = groupsFromFile[listIndex]
 				if group:
 					# LOCATE MESSAGE
 					print "Locate group index [%d]:" % listIndex
